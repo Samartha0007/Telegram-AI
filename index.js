@@ -1,46 +1,44 @@
-// index.js
-require('dotenv').config();
-const { Telegraf } = require('telegraf');
-const fetch = require('node-fetch');
+require("dotenv").config();
+const { Telegraf } = require("telegraf");
+const fetch = require("node-fetch");
 
-// Load your Telegram and Gemini API keys from environment variables
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Telegraf(process.env.BOT_TOKEN);
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
 
-// Function to send the user's message to Gemini and get a response
-async function askGemini(prompt) {
+// Reply to all user messages
+bot.on("text", async (ctx) => {
+  const userMessage = ctx.message.text;
+
   try {
-    const response = await fetch(GEMINI_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const response = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
+        contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      }),
     });
 
     const data = await response.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
-  } catch (error) {
-    console.error('Gemini API Error:', error);
-    return 'Error communicating with Gemini API.';
-  }
-}
 
-// Handle incoming text messages from Telegram
-bot.on('text', async (ctx) => {
-  const message = ctx.message.text;
-  console.log(`Received: ${message}`);
-  await ctx.sendChatAction('typing');
-  const reply = await askGemini(message);
-  ctx.reply(reply);
+    if (!response.ok || !data.candidates) {
+      console.error("Gemini Error:", data);
+      return ctx.reply("Something went wrong with Gemini.");
+    }
+
+    const reply = data.candidates[0].content.parts[0].text;
+    ctx.reply(reply);
+  } catch (err) {
+    console.error("Bot error:", err);
+    ctx.reply("Oops! I couldn’t get a response from Gemini.");
+  }
 });
 
-// Start the bot (long polling)
-bot.launch()
-  .then(() => console.log('Telegram bot is running...'))
-  .catch((err) => console.error('Bot failed to start:', err));
+// Start the bot
+bot.launch();
+console.log("Telegram bot is running...");
 
-// Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// Graceful shutdown
+process.once("SIGINT", () => bot.stop("SIGINT"));
+process.once("SIGTERM", () => bot.stop("SIGTERM"));
